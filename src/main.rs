@@ -1,3 +1,4 @@
+use std::fs;
 use reqwest::{ Url, Request, Method, Client };
 use regex::Regex;
 use std::error::Error;
@@ -5,6 +6,8 @@ use std::error::Error;
 #[cfg(not(target_arch="wasm32"))]
 #[tokio::main]
 async fn main() -> Result<(), reqwest::Error> {
+
+    let mut results_list = vec![String::from("HAS_YOUTUBE_IFRAME,URL")];
 
     let user_agent = if let Some(user_agent) = std::env::args().nth(1) {
         user_agent
@@ -26,6 +29,8 @@ async fn main() -> Result<(), reqwest::Error> {
     };
 
     for url in url_list {
+        let mut string_output = String::new();
+
         let url_formatted = Url::parse(&url).expect("URL parse error from vec");
 
         let request: Request = Request::new(Method::GET, url_formatted);
@@ -36,17 +41,21 @@ async fn main() -> Result<(), reqwest::Error> {
             .send()
             .await?;
 
-            eprintln!("Response: {:?} {}", res.version(), res.status());
-        eprintln!("Headers: {:#?}\n", res.headers());
+        eprintln!("Response: {:?} {}", res.version(), res.status());
+        // eprintln!("Headers: {:#?}\n", res.headers());
 
         let body = res.text().await?;
 
         // This regex expression searches for iframe code sourced to https://www.youtube.com
         let re = Regex::new(r#"<iframe.*src="https:\/\/www\.youtube\.com.*\".*>"#).unwrap();
 
-        println!("{:?}", re.is_match(&body));
-
+        string_output.push_str(&re.is_match(&body).to_string());
+        string_output.push(',');
+        string_output.push_str(&url);
+        results_list.push(string_output);
     }
+
+    write_to_results(results_list);
     
     Ok(())
 }
@@ -60,7 +69,21 @@ fn get_list_from_csv() -> Result<Vec<String>, Box<dyn Error>> {
         results.push(String::from(record.get(0).unwrap()));
     }
 
-    println!("{:?}", results);
+    // println!("{:?}", results);
 
     Ok(results)
+}
+
+fn write_to_results(results: Vec<String>) -> Result<(), std::io::Result<()>> {
+    
+    let output_str = &results.join("\n");
+
+    let path = "results.csv";
+
+    fs::write(path, output_str);
+    // let mut output = File::create(path)?;
+
+    // write!(output, output_str);
+
+    Ok(())
 }
